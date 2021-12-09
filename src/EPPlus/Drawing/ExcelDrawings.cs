@@ -41,6 +41,8 @@ namespace OfficeOpenXml.Drawing
         private XmlDocument _drawingsXml = new XmlDocument();
         internal Dictionary<string, int> _drawingNames;
         internal List<ExcelDrawing> _drawingsList;
+        Dictionary<string, HashInfo> _hashes = new Dictionary<string, HashInfo>();
+
         internal class ImageCompare
         {
             internal byte[] image { get; set; }
@@ -63,19 +65,20 @@ namespace OfficeOpenXml.Drawing
                 return true; //Equal
             }
         }
-        //internal List<ImageCompare> _pics = new List<ImageCompare>();
-        internal Dictionary<string, HashInfo> _hashes = new Dictionary<string, HashInfo>();
         internal ExcelPackage _package;
         internal Packaging.ZipPackageRelationship _drawingRelation = null;
         internal string _seriesTemplateXml;
         internal ExcelDrawings(ExcelPackage xlPackage, ExcelWorksheet sheet)
         {
+            xlPackage.Workbook.LoadAllDrawings(sheet.Name);
+
+            _package = xlPackage;
+            Worksheet = sheet;
+
             _drawingsXml = new XmlDocument();
             _drawingsXml.PreserveWhitespace = false;
             _drawingsList = new List<ExcelDrawing>();
             _drawingNames = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            _package = xlPackage;
-            Worksheet = sheet;
             CreateNSM();
             XmlNode node = sheet.WorksheetXml.SelectSingleNode("//d:drawing", sheet.NameSpaceManager);
             if (node != null && sheet !=null)
@@ -481,16 +484,11 @@ namespace OfficeOpenXml.Drawing
             var chartType = ExcelStockChart.GetChartType(OpenSerie, VolumeSerie);
 
             var chart = (ExcelStockChart)AddAllChartTypes(Name, chartType, null);
-            var firstRowIsHeader = false;
             if (CategorySerie.Rows > 1)
             {
                 if (CategorySerie.Offset(1, 0, 1, 1).Value is string)
                 {
                     chart.XAxis.ChangeAxisType(eAxisType.Date);
-                }
-                if(HighSerie.Offset(0, 0, 1, 1).Value is string)
-                {
-                    firstRowIsHeader = true;
                 }
             }
             chart.AddHighLowLines();
@@ -1583,8 +1581,6 @@ namespace OfficeOpenXml.Drawing
         public void Dispose()
         {
             _drawingsXml = null;
-            _hashes.Clear();
-            _hashes = null;
             _part = null;
             _drawingNames.Clear();
             _drawingNames = null;

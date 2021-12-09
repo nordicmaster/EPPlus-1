@@ -24,16 +24,16 @@ using OfficeOpenXml.Packaging.Ionic.Zip;
 using OfficeOpenXml.Drawing.Theme;
 using OfficeOpenXml.Compatibility;
 using OfficeOpenXml.Core.CellStore;
-using OfficeOpenXml.Style;
 using OfficeOpenXml.Drawing.Slicer;
 using OfficeOpenXml.ThreadedComments;
 using OfficeOpenXml.Table;
 using System.Linq;
 using OfficeOpenXml.Table.PivotTable;
-using OfficeOpenXml.FormulaParsing.Excel.Functions.RefAndLookup;
 using OfficeOpenXml.Drawing;
-using System.Net.Mime;
 using OfficeOpenXml.Constants;
+using OfficeOpenXml.ExternalReferences;
+using OfficeOpenXml.Packaging;
+using OfficeOpenXml.Drawing.Interfaces;
 
 namespace OfficeOpenXml
 {
@@ -80,8 +80,7 @@ namespace OfficeOpenXml
 		private ExcelStyles _styles;
 		//internal HashSet<string> _tableSlicerNames = new HashSet<string>();
 		internal HashSet<string> _slicerNames=null;
-
-
+		internal Dictionary<string, ImageInfo> _images = new Dictionary<string, ImageInfo>();
 		internal bool GetPivotCacheFromAddress(string fullAddress, out PivotTableCacheInternal cacheReference)
 		{
 			if (_pivotTableCaches.TryGetValue(fullAddress, out PivotTableCacheRangeInfo cacheInfo))
@@ -93,8 +92,23 @@ namespace OfficeOpenXml
 			return false;
 
 		}
+        internal void LoadAllDrawings(string loadingWsName)
+        {
+            if(_worksheets._areDrawingsLoaded)
+            {
+				return;
+            }
+			_worksheets._areDrawingsLoaded = true;
+			foreach (var ws in Worksheets)
+            {
+				if (loadingWsName.Equals(ws.Name, StringComparison.OrdinalIgnoreCase)==false)
+				{
+					ws.LoadDrawings();
+				}
+            }
+        }
 
-		internal string GetSlicerName(string name)
+        internal string GetSlicerName(string name)
 		{
 			if (_slicerNames == null) LoadSlicerNames();
 			return GetUniqueName(name, _slicerNames);
@@ -291,7 +305,7 @@ namespace OfficeOpenXml
 			{
 				foreach (XmlElement elem in nl)
 				{
-					string fullAddress = elem.InnerText;
+					string fullAddress = elem.InnerText.TrimStart().TrimEnd();
 
 					int localSheetID;
 					ExcelWorksheet nameWorksheet;
@@ -498,6 +512,24 @@ namespace OfficeOpenXml
 				return _names;
 			}
 		}
+		internal ExcelExternalLinksCollection _externalLinks=null;
+		/// <summary>
+		/// A collection of links to external workbooks and it's cached data.
+		/// This collection can also contain DDE and OLE links. DDE and OLE are readonly and can not be added.
+		/// </summary>
+		public ExcelExternalLinksCollection ExternalLinks
+		{
+			get
+            {
+				if(_externalLinks==null)
+                {
+					_externalLinks = new ExcelExternalLinksCollection(this);
+
+				}
+				return _externalLinks;
+
+			}
+        }
 		#region Workbook Properties
 		decimal _standardFontWidth = decimal.MinValue;
 		string _fontID = "";
@@ -549,8 +581,8 @@ namespace OfficeOpenXml
 		public decimal MaxFontWidth
 		{
 			get
-			{
-				var ix = Styles.NamedStyles.FindIndexById("Normal");
+			{				
+				var ix = Styles.GetNormalStyleIndex();
 				if (ix >= 0)
 				{
 					var font = Styles.NamedStyles[ix].Style.Font;
@@ -580,6 +612,46 @@ namespace OfficeOpenXml
 			}
 		}
 
+		internal static decimal GetHeightPixels(string fontName, float fontSize)
+		{
+			Dictionary<float, FontSizeInfo> font;
+			if (FontSize.FontHeights.ContainsKey(fontName))
+			{
+				font = FontSize.FontHeights[fontName];
+			}
+			else
+			{
+				font = FontSize.FontHeights["Calibri"];
+			}
+
+			if (font.ContainsKey(fontSize))
+			{
+				return Convert.ToDecimal(font[fontSize].Width);
+			}
+			else
+			{
+				float min = -1, max = 500;
+				foreach (var size in font)
+				{
+					if (min < size.Key && size.Key < fontSize)
+					{
+						min = size.Key;
+					}
+					if (max > size.Key && size.Key > fontSize)
+					{
+						max = size.Key;
+					}
+				}
+				if (min == max)
+				{
+					return Convert.ToDecimal(font[min].Height);
+				}
+				else
+				{
+					return Convert.ToDecimal(font[min].Height + (font[max].Height - font[min].Height) * ((fontSize - min) / (max - min)));
+				}
+			}
+		}
 		internal static decimal GetWidthPixels(string fontName, float fontSize)
 		{
 			Dictionary<float, FontSizeInfo> font;
@@ -616,7 +688,7 @@ namespace OfficeOpenXml
 				}
 				else
 				{
-					return Convert.ToDecimal(font[min].Height + (font[max].Height - font[min].Height) * ((fontSize - min) / (max - min)));
+					return Convert.ToDecimal(font[min].Width + (font[max].Width - font[min].Width) * ((fontSize - min) / (max - min)));
 				}
 			}
 		}
@@ -668,6 +740,10 @@ namespace OfficeOpenXml
 					{
 						_vba = new ExcelVbaProject(this);
 					}
+					else if (Part.ContentType == ContentTypes.contentTypeWorkbookMacroEnabled) //Project is macro enabled, but no bin file exists.
+					{
+						CreateVBAProject();
+					}
 				}
 				return _vba;
 			}
@@ -680,6 +756,7 @@ namespace OfficeOpenXml
 			if (_vba != null)
 			{
 				_vba.RemoveMe();
+				Part.ContentType = ContentTypes.contentTypeWorkbookDefault;
 				_vba = null;
 			}
 		}
@@ -693,7 +770,8 @@ namespace OfficeOpenXml
 			{
 				throw (new InvalidOperationException("VBA project already exists."));
 			}
-
+			
+			Part.ContentType = ContentTypes.contentTypeWorkbookMacroEnabled;
 			_vba = new ExcelVbaProject(this);
 			_vba.Create();
 		}
@@ -1065,7 +1143,8 @@ namespace OfficeOpenXml
 
 			if (_vba == null && !_package.ZipPackage.PartExists(new Uri(ExcelVbaProject.PartUri, UriKind.Relative)))
 			{
-				if (Part.ContentType != ContentTypes.contentTypeWorkbookDefault)
+				if (Part.ContentType != ContentTypes.contentTypeWorkbookDefault && 
+					Part.ContentType != ContentTypes.contentTypeWorkbookMacroEnabled)
 				{
 					Part.ContentType = ContentTypes.contentTypeWorkbookDefault;
 				}
@@ -1086,8 +1165,13 @@ namespace OfficeOpenXml
 				SavePivotTableCaches();
 			}
 
-			// save the workbook
-			if (_workbookXml != null)
+			if(_externalLinks!=null)
+            {
+                SaveExternalLinks();
+            }
+
+            // save the workbook
+            if (_workbookXml != null)
 			{
 				if(Worksheets[_package._worksheetAdd].Hidden!=eWorkSheetHidden.Visible)
 				{
@@ -1143,7 +1227,7 @@ namespace OfficeOpenXml
 
 			part.SaveHandler = SaveSharedStringHandler;
 
-			// Data validation
+			//// Data validation
 			ValidateDataValidations();
 
 			//VBA
@@ -1154,7 +1238,32 @@ namespace OfficeOpenXml
 
 		}
 
-		private void SavePivotTableCaches()
+        private void SaveExternalLinks()
+        {
+            foreach (var er in _externalLinks)
+            {
+                if (er.Part == null)
+                {
+                    var ewb = er.As.ExternalWorkbook;
+                    var uri = GetNewUri(_package.ZipPackage, "/xl/externalLinks/externalLink{0}.xml");
+                    ewb.Part = _package.ZipPackage.CreatePart(uri, ContentTypes.contentTypeExternalLink);
+					var extFile = ((ExcelExternalWorkbook)er).File;
+					ewb.Relation = er.Part.CreateRelationship(extFile.FullName, TargetMode.External, ExcelPackage.schemaRelationships + "/externalLinkPath");
+
+                    var wbRel = Part.CreateRelationship(uri, TargetMode.Internal, ExcelPackage.schemaRelationships + "/externalLink");
+                    var wbExtRefElement = (XmlElement)CreateNode("d:externalReferences/d:externalReference", false, true);
+                    wbExtRefElement.SetAttribute("id", ExcelPackage.schemaRelationships, wbRel.Id);
+                }
+                var sw = new StreamWriter(er.Part.GetStream(FileMode.CreateNew));
+                sw.Write("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>");
+                sw.Write("<externalLink xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\" mc:Ignorable=\"x14\" xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">");
+                er.Save(sw);
+                sw.Write("</externalLink>");
+                sw.Flush();
+            }
+        }
+
+        private void SavePivotTableCaches()
 		{
 			foreach (var info in _pivotTableCaches.Values)
 			{
@@ -1245,18 +1354,18 @@ namespace OfficeOpenXml
 			}
 		}
 
-		private void ValidateDataValidations()
-		{
-			foreach (var sheet in _package.Workbook.Worksheets)
-			{
-				if (!(sheet is ExcelChartsheet))
-				{
-					sheet.DataValidations.ValidateAll();
-				}
-			}
-		}
+        private void ValidateDataValidations()
+        {
+            foreach (var sheet in _package.Workbook.Worksheets)
+            {
+                if (!(sheet is ExcelChartsheet))
+                {
+                    sheet.DataValidations.ValidateAll();
+                }
+            }
+        }
 
-		private void SaveSharedStringHandler(ZipOutputStream stream, CompressionLevel compressionLevel, string fileName)
+        private void SaveSharedStringHandler(ZipOutputStream stream, CompressionLevel compressionLevel, string fileName)
 		{
 			//Init Zip
 			stream.CompressionLevel = (OfficeOpenXml.Packaging.Ionic.Zlib.CompressionLevel)compressionLevel;
@@ -1507,35 +1616,7 @@ namespace OfficeOpenXml
 			DeleteNode(path, true);
 			Part.DeleteRelationship(relId);
 		}
-		internal List<string> _externalReferences = new List<string>();
 		//internal bool _isCalculated=false;
-		internal void GetExternalReferences()
-		{
-			XmlNodeList nl = WorkbookXml.SelectNodes("//d:externalReferences/d:externalReference", NameSpaceManager);
-			if (nl != null)
-			{
-				foreach (XmlElement elem in nl)
-				{
-					string rID = elem.GetAttribute("r:id");
-					var rel = Part.GetRelationship(rID);
-					var part = _package.ZipPackage.GetPart(UriHelper.ResolvePartUri(rel.SourceUri, rel.TargetUri));
-					XmlDocument xmlExtRef = new XmlDocument();
-					LoadXmlSafe(xmlExtRef, part.GetStream());
-
-					XmlElement book = xmlExtRef.SelectSingleNode("//d:externalBook", NameSpaceManager) as XmlElement;
-					if (book != null)
-					{
-						string rId_ExtRef = book.GetAttribute("r:id");
-						var rel_extRef = part.GetRelationship(rId_ExtRef);
-						if (rel_extRef != null)
-						{
-							_externalReferences.Add(rel_extRef.TargetUri.OriginalString);
-						}
-
-					}
-				}
-			}
-		}
 		/// <summary>
 		/// Disposes the workbooks
 		/// </summary>

@@ -114,7 +114,6 @@ namespace OfficeOpenXml.Drawing.Chart
         private void Init(ExcelDrawings drawings, XmlNode chartNode)
         {
             _isChartEx = chartNode.NamespaceURI == ExcelPackage.schemaChartExMain;
-            _hashes = new Dictionary<string, HashInfo>();
             _chartXmlHelper = XmlHelperFactory.Create(drawings.NameSpaceManager, chartNode);
             _chartXmlHelper.AddSchemaNodeOrder(new string[] { "date1904", "lang", "roundedCorners", "AlternateContent", "style", "clrMapOvr", "pivotSource", "protection", "chart", "ofPieType", "title", "pivotFmt", "autoTitleDeleted", "view3D", "floor", "sideWall", "backWall", "plotArea", "wireframe", "barDir", "grouping", "scatterStyle", "radarStyle", "varyColors", "ser", "dLbls", "bubbleScale", "showNegBubbles", "firstSliceAng", "holeSize", "dropLines", "hiLowLines", "upDownBars", "marker", "smooth", "shape", "legend", "plotVisOnly", "dispBlanksAs", "gapWidth", "upBars", "downBars", "showDLblsOverMax", "overlap", "bandFmts", "axId", "spPr", "txPr", "printSettings" }, ExcelDrawing._schemaNodeOrderSpPr);
             WorkSheet = drawings.Worksheet;
@@ -975,11 +974,10 @@ namespace OfficeOpenXml.Drawing.Chart
                 return _plotArea;
             }
         }
-        ExcelChartLegend _legend = null;
         /// <summary>
         /// Legend
         /// </summary>
-        public override ExcelChartLegend Legend
+        public new ExcelChartLegend Legend
         {
             get
             {
@@ -1085,7 +1083,7 @@ namespace OfficeOpenXml.Drawing.Chart
         /// <summary>
         /// 3D-settings
         /// </summary>
-        public ExcelView3D View3D
+        public override ExcelView3D View3D
         {
             get
             {
@@ -1137,7 +1135,6 @@ namespace OfficeOpenXml.Drawing.Chart
                 }
             }
         }
-        ExcelChartTitle _title = null;
 
         #region "Grouping Enum Translation"
         private string GetGroupingText(eGrouping grouping)

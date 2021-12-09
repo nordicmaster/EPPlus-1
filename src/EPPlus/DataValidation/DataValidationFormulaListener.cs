@@ -31,12 +31,13 @@ namespace OfficeOpenXml.DataValidation
                     if (validation.ValidationType == ExcelDataValidationType.List)
                     {
                         var listValidation = validation as ExcelDataValidationList;
-                        var extValidation = new ExcelDataValidationExtList(_worksheet, validation.Uid, validation.Address.Address, validation.ValidationType);
+                        var extValidation = new ExcelDataValidationExtList(_worksheet, validation.Uid, validation.Address.AddressSpaceSeparated, validation.ValidationType);
                         extValidation.AllowBlank = validation.AllowBlank;
                         extValidation.Error = validation.Error;
                         extValidation.ErrorStyle = validation.ErrorStyle;
                         extValidation.ErrorTitle = validation.ErrorTitle;
                         extValidation.ShowErrorMessage = validation.ShowErrorMessage;
+                        extValidation.HideDropDown = listValidation.HideDropDown;
                         extValidation.Formula.ExcelFormula = e.NewValue;
                         listValidation.SetStale();
                         _dataValidations.Remove(listValidation);
@@ -45,7 +46,7 @@ namespace OfficeOpenXml.DataValidation
                     else if(validation.ValidationType == ExcelDataValidationType.Custom)
                     {
                         var customValidation = validation as ExcelDataValidationCustom;
-                        var extValidation = new ExcelDataValidationExtCustom(_worksheet, validation.Uid, validation.Address.Address, validation.ValidationType);
+                        var extValidation = new ExcelDataValidationExtCustom(_worksheet, validation.Uid, validation.Address.AddressSpaceSeparated, validation.ValidationType);
                         extValidation.AllowBlank = validation.AllowBlank;
                         extValidation.Error = validation.Error;
                         extValidation.ErrorStyle = validation.ErrorStyle;
@@ -68,12 +69,13 @@ namespace OfficeOpenXml.DataValidation
                     if (validation.ValidationType == ExcelDataValidationType.List)
                     {
                         var listValidation = validation as ExcelDataValidationExtList;
-                        var dataValidation = _dataValidations.AddListValidation(validation.Address.Address, listValidation.Uid);
+                        var dataValidation = _dataValidations.AddListValidation(validation.Address.AddressSpaceSeparated, listValidation.Uid);
                         dataValidation.AllowBlank = validation.AllowBlank;
                         dataValidation.Error = validation.Error;
                         dataValidation.ErrorStyle = validation.ErrorStyle;
                         dataValidation.ErrorTitle = validation.ErrorTitle;
                         dataValidation.ShowErrorMessage = validation.ShowErrorMessage;
+                        dataValidation.HideDropDown = listValidation.HideDropDown;
                         dataValidation.Formula.ExcelFormula = e.NewValue;
                         listValidation.SetStale();
                         _dataValidations.DataValidationsExt.Remove(listValidation);
@@ -82,7 +84,7 @@ namespace OfficeOpenXml.DataValidation
                     {
                         var customValidation = validation as ExcelDataValidationExtCustom;
                         _dataValidations.DataValidationsExt.GetRootNode();
-                        var dataValidation = _dataValidations.AddCustomValidation(validation.Address.Address, customValidation.Uid);
+                        var dataValidation = _dataValidations.AddCustomValidation(validation.Address.AddressSpaceSeparated, customValidation.Uid);
                         dataValidation.AllowBlank = validation.AllowBlank;
                         dataValidation.Error = validation.Error;
                         dataValidation.ErrorStyle = validation.ErrorStyle;

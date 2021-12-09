@@ -332,10 +332,13 @@ namespace OfficeOpenXml.Core.Worksheet
             //Validate merged Cells
             foreach (var a in range.Worksheet.MergedCells)
             {
-                var mc = new ExcelAddressBase(a);
-                if (effectedAddress.Collide(mc) == ExcelAddressBase.eAddressCollition.Partly)
+                if (!string.IsNullOrEmpty(a))
                 {
-                    throw new InvalidOperationException($"Can't {(insert ? "insert into" : "delete from")} the range. Cells collide with merged range {a}");
+                    var mc = new ExcelAddressBase(a);
+                    if (effectedAddress.Collide(mc) == ExcelAddressBase.eAddressCollition.Partly)
+                    {
+                        throw new InvalidOperationException($"Can't {(insert ? "insert into" : "delete from")} the range. Cells collide with merged range {a}");
+                    }
                 }
             }
 
@@ -351,9 +354,8 @@ namespace OfficeOpenXml.Core.Worksheet
             //Validate tables Cells
             foreach (var t in range.Worksheet.Tables)
             {
-                if (effectedAddressTable.Collide(t.Address) == ExcelAddressBase.eAddressCollition.Partly
-                    &&
-                    t.Address.CollideFullRowOrColumn(range) ==false)
+                if (effectedAddressTable.Collide(t.Address) == ExcelAddressBase.eAddressCollition.Partly &&
+                    effectedAddress.Collide(t.Address) != ExcelAddressBase.eAddressCollition.No)
                 {
                     throw new InvalidOperationException($"Can't {(insert ? "insert into" : "delete from")} the range. Cells collide with table {t.Name}");
                 }

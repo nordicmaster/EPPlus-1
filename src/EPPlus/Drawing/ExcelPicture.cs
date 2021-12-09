@@ -52,10 +52,18 @@ namespace OfficeOpenXml.Drawing
                 container.RelPic = drawings.Part.GetRelationship(picNode.Attributes["embed", ExcelPackage.schemaRelationships].Value);
                 container.UriPic = UriHelper.ResolvePartUri(drawings.UriDrawing, container.RelPic.TargetUri);
 
-                Part = drawings.Part.Package.GetPart(container.UriPic);
                 var extension = Path.GetExtension(container.UriPic.OriginalString);
                 ContentType = PictureStore.GetContentType(extension);
-
+                if (drawings.Part.Package.PartExists(container.UriPic))
+                {
+                    Part = drawings.Part.Package.GetPart(container.UriPic);
+                }
+                else
+                {
+                    Part = null;
+                    _image = null;
+                    return;
+                }
 #if (Core)
                 try
                 {
@@ -134,19 +142,20 @@ namespace OfficeOpenXml.Drawing
             IPictureContainer container = this;
             container.UriPic = GetNewUri(package, "/xl/media/image{0}." + type.ToString());
             var store = _drawings._package.PictureStore;
+            var pc = _drawings as IPictureRelationDocument;            
             var ii = store.AddImage(img, container.UriPic, ContentType);
             string relId;
-            if (!_drawings._hashes.ContainsKey(ii.Hash))
+            if (!pc.Hashes.ContainsKey(ii.Hash))
             {
                 Part = ii.Part;
                 container.RelPic = _drawings.Part.CreateRelationship(UriHelper.GetRelativeUri(_drawings.UriDrawing, ii.Uri), Packaging.TargetMode.Internal, ExcelPackage.schemaRelationships + "/image");
                 relId = container.RelPic.Id;
-                _drawings._hashes.Add(ii.Hash, new HashInfo(relId));
+                pc.Hashes.Add(ii.Hash, new HashInfo(relId));
                 AddNewPicture(img, relId);
             }
             else
             {
-                relId = _drawings._hashes[ii.Hash].RelId;
+                relId = pc.Hashes[ii.Hash].RelId;
                 var rel = _drawings.Part.GetRelationship(relId);
                 container.UriPic = UriHelper.ResolvePartUri(rel.SourceUri, rel.TargetUri);
             }
@@ -181,8 +190,10 @@ namespace OfficeOpenXml.Drawing
         private void SetPosDefaults(Image image)
         {
             EditAs = eEditAs.OneCell;
-            SetPixelWidth(image.Width, image.HorizontalResolution);
-            SetPixelHeight(image.Height, image.VerticalResolution);
+            var width = image.Width / (image.HorizontalResolution / STANDARD_DPI);
+            var height = image.Height / (image.VerticalResolution / STANDARD_DPI);
+            SetPixelWidth(width);
+            SetPixelHeight(height);
             _width = GetPixelWidth();
             _height = GetPixelHeight();
         }
@@ -261,15 +272,15 @@ namespace OfficeOpenXml.Drawing
             }
             else
             {
-                _width = Image.Width;
-                _height = Image.Height;
+                _width = Image.Width / (Image.HorizontalResolution / STANDARD_DPI);
+                _height = Image.Height / (Image.VerticalResolution / STANDARD_DPI);
 
                 _width = (int)(_width * ((double)Percent / 100));
                 _height = (int)(_height * ((double)Percent / 100));
 
                 _doNotAdjust = true;
-                SetPixelWidth(_width, Image.HorizontalResolution);
-                SetPixelHeight(_height, Image.VerticalResolution);
+                SetPixelWidth(_width);
+                SetPixelHeight(_height);
                 _doNotAdjust = false;
             }
         }
@@ -373,10 +384,10 @@ namespace OfficeOpenXml.Drawing
         /// </summary>
         public override void Dispose()
         {
-            base.Dispose();
-            Hyperlink = null;
-            _image.Dispose();
-            _image = null;            
+            //base.Dispose();
+            //Hyperlink = null;
+            //_image.Dispose();
+            //_image = null;            
         }
     }
 }

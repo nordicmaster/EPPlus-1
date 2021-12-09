@@ -182,7 +182,7 @@ namespace OfficeOpenXml.FormulaParsing.Excel.Functions
         }
 
         /// <summary>
-        /// Returns the value of the argument att the position of the 0-based
+        /// Returns the value of the argument att the position of the 0-based index
         /// <paramref name="index"/> as an integer.
         /// </summary>
         /// <param name="arguments"></param>
@@ -191,8 +191,31 @@ namespace OfficeOpenXml.FormulaParsing.Excel.Functions
         /// <exception cref="ExcelErrorValueException"></exception>
         protected int ArgToInt(IEnumerable<FunctionArgument> arguments, int index)
         {
-            var val = arguments.ElementAt(index).ValueFirst;
+            var arg = arguments.ElementAt(index);
+            if (arg.ValueIsExcelError)
+            {
+                throw new ExcelErrorValueException(arg.ValueAsExcelErrorValue);
+            }
+            var val = arg.ValueFirst;
             return (int)_argumentParsers.GetParser(DataType.Integer).Parse(val);
+        }
+
+        /// <summary>
+        /// Returns the value of the argument att the position of the 0-based index
+        /// </summary>
+        /// <param name="arguments"></param>
+        /// <param name="index"></param>
+        /// <param name="ignoreErrors">If true an Excel error in the cell will be ignored</param>
+        /// <returns>Value of the argument as an integer.</returns>
+        /// /// <exception cref="ExcelErrorValueException"></exception>
+        protected int ArgToInt(IEnumerable<FunctionArgument> arguments, int index, bool ignoreErrors)
+        {
+            var arg = arguments.ElementAt(index);
+            if(arg.ValueIsExcelError && !ignoreErrors)
+            {
+                throw new ExcelErrorValueException(arg.ValueAsExcelErrorValue.Type);
+            }
+            return (int)_argumentParsers.GetParser(DataType.Integer).Parse(arg.ValueFirst);
         }
 
         /// <summary>
@@ -206,7 +229,12 @@ namespace OfficeOpenXml.FormulaParsing.Excel.Functions
         /// <exception cref="ExcelErrorValueException"></exception>
         protected int ArgToInt(IEnumerable<FunctionArgument> arguments, int index, RoundingMethod roundingMethod)
         {
-            var val = arguments.ElementAt(index).ValueFirst;
+            var arg = arguments.ElementAt(index);
+            if (arg.ValueIsExcelError)
+            {
+                throw new ExcelErrorValueException(arg.ValueAsExcelErrorValue);
+            }
+            var val = arg.ValueFirst;
             return (int)_argumentParsers.GetParser(DataType.Integer).Parse(val, roundingMethod);
         }
 
@@ -261,7 +289,12 @@ namespace OfficeOpenXml.FormulaParsing.Excel.Functions
         /// <exception cref="ExcelErrorValueException"></exception>
         protected double ArgToDecimal(IEnumerable<FunctionArgument> arguments, int index)
         {
-            return ArgToDecimal(arguments.ElementAt(index).Value, PrecisionAndRoundingStrategy.DotNet);
+            var arg = arguments.ElementAt(index);
+            if (arg.ValueIsExcelError)
+            {
+                throw new ExcelErrorValueException(arg.ValueAsExcelErrorValue);
+            }
+            return ArgToDecimal(arg.Value, PrecisionAndRoundingStrategy.DotNet);
         }
 
         /// <summary>
@@ -275,7 +308,12 @@ namespace OfficeOpenXml.FormulaParsing.Excel.Functions
         /// <exception cref="ExcelErrorValueException"></exception>
         protected double ArgToDecimal(IEnumerable<FunctionArgument> arguments, int index, PrecisionAndRoundingStrategy precisionAndRoundingStrategy)
         {
-            return ArgToDecimal(arguments.ElementAt(index).Value, precisionAndRoundingStrategy);
+            var arg = arguments.ElementAt(index);
+            if (arg.ValueIsExcelError)
+            {
+                throw new ExcelErrorValueException(arg.ValueAsExcelErrorValue);
+            }
+            return ArgToDecimal(arg.Value, precisionAndRoundingStrategy);
         }
 
         /// <summary>
@@ -448,6 +486,7 @@ namespace OfficeOpenXml.FormulaParsing.Excel.Functions
         /// <param name="ignoreErrors">If a cell contains an error, that error will be ignored if this method is set to true</param>
         /// <param name="arguments"></param>
         /// <param name="context"></param>
+        /// <param name="ignoreNonNumeric"></param>
         /// <returns></returns>
         protected virtual IEnumerable<ExcelDoubleCellValue> ArgsToDoubleEnumerable(bool ignoreHiddenCells, bool ignoreErrors, IEnumerable<FunctionArgument> arguments, ParsingContext context, bool ignoreNonNumeric)
         {
@@ -460,6 +499,7 @@ namespace OfficeOpenXml.FormulaParsing.Excel.Functions
         /// <param name="ignoreHiddenCells">If a cell is hidden and this value is true the value of that cell will be ignored</param>
         /// <param name="arguments"></param>
         /// <param name="context"></param>
+        /// <param name="ignoreNonNumeric"></param>
         /// <returns></returns>
         protected virtual IEnumerable<ExcelDoubleCellValue> ArgsToDoubleEnumerable(bool ignoreHiddenCells, IEnumerable<FunctionArgument> arguments, ParsingContext context, bool ignoreNonNumeric)
         {
@@ -472,7 +512,7 @@ namespace OfficeOpenXml.FormulaParsing.Excel.Functions
         /// </summary>
         /// <param name="ignoreHiddenCells">If a cell is hidden and this value is true the value of that cell will be ignored</param>
         /// <param name="arguments"></param>
-        /// <param name="context"></param>
+        /// <param name="context"></param>        
         /// <returns></returns>
         protected virtual IEnumerable<ExcelDoubleCellValue> ArgsToDoubleEnumerable(bool ignoreHiddenCells, IEnumerable<FunctionArgument> arguments, ParsingContext context)
         {
